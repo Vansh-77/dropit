@@ -1,7 +1,6 @@
-import bcrypt from 'bcryptjs';
+
 
 const rooms = new Map();
-
 
 export default function (io) {
     io.on('connection', socket => {
@@ -12,8 +11,7 @@ export default function (io) {
                     socket.emit('error', 'room not found');
                     return;
                 }
-                const isValidPassword = bcrypt.compare(password, room.password);
-                if (!isValidPassword) {
+                if (room.password !== password) {
                     socket.emit('error', 'Invalid password');
                     return;
                 }
@@ -29,22 +27,42 @@ export default function (io) {
                 console.log(error);
                 socket.emit('error', 'Internal server error');
             }
-            socket.on('signal', ({ targetId, signal }) => {
-                io.to(targetId).emit('sigmal', { sourceId: socket.id, signal });
-            });
+        });
 
-            socket.on('disconnect', () => {
-                const room = rooms.get(socket.roomId);
+        socket.on('createRoom', ({ roomName, password }) => {
+            try {
+                const room = rooms.get(roomName);
                 if (room) {
-                    room.members.delete(socket.id);
-                    if (room.members.size === 0) {
-                        rooms.delete(socket.roomId);
-                    }
-                    room.members.forEach(peerId => {
-                        io.to(peerId).emit('memberLeft', socket.id);
-                    });
+                    socket.emit('error', 'room already exists');
+                    return;
                 }
-            });
+                rooms.set(roomName , {
+                    members: new Set([socket.id]),
+                    password: password,
+                });
+                socket.roomId = roomName;
+                socket.emit('success', `Created room: ${roomName}`);
+            } catch (error) {
+                console.log(error);
+                socket.emit('error', 'Internal server error');
+            }
+        });
+
+        socket.on('signal', ({ targetId, signal }) => {
+            io.to(targetId).emit('signal', { sourceId: socket.id, signal });
+        });
+
+        socket.on('disconnect', () => {
+            const room = rooms.get(socket.roomId);
+            if (room) {
+                room.members = room.members.filter(peerId => peerId !== socket.id);
+                if (room.members.size === 0) {
+                    rooms.delete(socket.roomId);
+                }
+                room.members.forEach(peerId => {
+                    io.to(peerId).emit('memberLeft', socket.id);
+                });
+            }
         });
     });
-}
+};
