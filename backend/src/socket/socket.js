@@ -25,7 +25,7 @@ export default function (io) {
                 socket.emit('success', `Joined room: ${roomName}`);
             } catch (error) {
                 console.log(error);
-                socket.emit('error', 'Internal server error');
+                socket.emit('InternalError', 'Internal server error');
             }
         });
 
@@ -33,7 +33,7 @@ export default function (io) {
             try {
                 const room = rooms.get(roomName);
                 if (room) {
-                    socket.emit('error', 'room already exists');
+                    socket.emit('error', 'Room Name already exists');
                     return;
                 }
                 rooms.set(roomName , {
@@ -42,9 +42,10 @@ export default function (io) {
                 });
                 socket.roomId = roomName;
                 socket.emit('success', `Created room: ${roomName}`);
+                console.log(rooms);
             } catch (error) {
                 console.log(error);
-                socket.emit('error', 'Internal server error');
+                socket.emit('internalError', 'Internal server error');
             }
         });
 
@@ -55,7 +56,7 @@ export default function (io) {
         socket.on('disconnect', () => {
             const room = rooms.get(socket.roomId);
             if (room) {
-                room.members = room.members.filter(peerId => peerId !== socket.id);
+                room.members.delete(socket.id);
                 if (room.members.size === 0) {
                     rooms.delete(socket.roomId);
                 }
