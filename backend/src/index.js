@@ -3,7 +3,7 @@ import cors from "cors";
 import {createServer}from "http";
 import {Server} from "socket.io";
 import socket from './socket/socket.js';
-import "dotenc/config";
+import "dotenv/config";
 
 const app = express();
 
