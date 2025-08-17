@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import { useParams } from "react-router";
 import socket from "../socket/socket";
 import Peer from "simple-peer";
-import {QRCodeSVG} from "qrcode.react";
+import { QRCodeSVG } from "qrcode.react";
+import { ToastContainer, toast, Bounce } from 'react-toastify';
 
 export default function RoomPage() {
     const { roomName } = useParams();
@@ -11,7 +12,6 @@ export default function RoomPage() {
     const [selectedFile, setSelectedFile] = useState(null);
     const [roomJoined, setroomJoined] = useState(false);
     const [roomExists, setroomExists] = useState(false);
-    const [Error, setError] = useState(null);
     const [initialrender, setinitialrender] = useState(true);
     const peersRef = useRef({});
 
@@ -101,6 +101,20 @@ export default function RoomPage() {
         }
     }, []);
 
+    const error = (err) => {
+        toast.error(err, {
+            position: "top-center",
+            autoClose: 5000,
+            hideProgressBar: false,
+            closeOnClick: false,
+            pauseOnHover: true,
+            draggable: true,
+            progress: undefined,
+            theme: "dark",
+            transition: Bounce,
+        });
+    }
+
     const createPeer = (peerId, initiator) => {
         const peer = new Peer({ initiator: initiator, trickle: false });
 
@@ -181,20 +195,20 @@ export default function RoomPage() {
             const password = localStorage.getItem("password");
             socket.emit("joinRoom", { roomName, password });
             socket.once("error", (message) => {
-                setError(message);
+                error(message);
                 if (message === "Room not found") {
                     setroomExists(false);
                 }
             })
             socket.once("InternalError", (message) => {
-                alert(message);
+                error(message);
             });
             socket.once("success", () => {
                 setroomJoined(true);
             });
 
         } catch (error) {
-            setError("An error occurred while joining the room.");
+            error("An error occurred while joining the room.");
         }
 
     }
@@ -202,12 +216,12 @@ export default function RoomPage() {
         try {
             const password = localStorage.getItem("password");
             if (!password) {
-                setError("Please enter a password to create a room.")
+                error("Please enter a password to create a room.")
                 return;
             }
             socket.emit("createRoom", { roomName, password });
             socket.once("error", (message) => {
-                setError(message);
+                error(message);
                 setroomExists(true);
             });
             socket.once("InternalError", (message) => {
@@ -219,7 +233,7 @@ export default function RoomPage() {
             });
 
         } catch (error) {
-            setError("Failed to create room. Please try again.");
+            error("Failed to create room. Please try again.");
         }
     };
 
@@ -263,8 +277,8 @@ export default function RoomPage() {
                 <div className="relative flex items-center justify-center h-full px-10">
                     <div className="w-full max-w-2xl bg-gray-800 rounded-xl shadow-lg overflow-hidden p-6 space-y-6">
                         <div className="flex justify-between items-center">
-                        <h1 className="text-xl font-bold">Room: {roomName}</h1>
-                         <QRCodeSVG value={roomUrl} size={150} />
+                            <h1 className="text-xl font-bold">Room: {roomName}</h1>
+                            <QRCodeSVG value={roomUrl} size={150} />
                         </div>
                         <div
                             onDragEnter={handleDrag}
@@ -346,6 +360,17 @@ export default function RoomPage() {
                     </button>
                 </div>
             </div>}
-        </div></>
+        </div>
+        <ToastContainer
+            stacked={true}
+            position="top-center"
+            autoClose={4000}
+            pauseOnFocusLoss
+            draggable
+            pauseOnHover
+            theme="dark"
+            transition={Bounce}
+        />
+    </>
     );
 }

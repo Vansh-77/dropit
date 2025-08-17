@@ -2,23 +2,22 @@ import { useState } from "react";
 import "./App.css";
 import socket from "../socket/socket";
 import { useNavigate } from "react-router";
+import { ToastContainer, toast ,Bounce } from 'react-toastify';
 
 export default function App() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("join");
   const [roomName, setRoomName] = useState("");
   const [password, setPassword] = useState("");
-  const [RoomNameError, setRoomNameError] = useState("");
-  const [PasswordError, setPasswordError] = useState("");
 
   const HandleCreateRoom = () => {
     try {
       socket.emit("createRoom", { roomName, password });
       socket.once("error", (message) => {
-        setRoomNameError(message);
+        error(message);
       });
       socket.once("InternalError", (message) => {
-        alert(message);
+        error(message);
       });
       socket.once("success", () => {
         localStorage.setItem("password", password);
@@ -26,7 +25,7 @@ export default function App() {
       });
 
     } catch (error) {
-      setRoomNameError("Failed to create room. Please try again.");
+      error("Failed to create room. Please try again.");
     }
   };
 
@@ -34,14 +33,10 @@ export default function App() {
     try {
       socket.emit("joinRoom", { roomName, password });
       socket.once("error", (message) => {
-        if (message === "Room not found") {
-          setRoomNameError(message);
-        } else {
-          setPasswordError(message);
-        }
+        error(message);
       });
       socket.once("InternalError", (message) => {
-        alert(message);
+       error(message);
       });
       socket.once("success", () => {
         localStorage.setItem("password", password);
@@ -49,7 +44,7 @@ export default function App() {
       });
 
     } catch (error) {
-      setError("An error occurred while joining the room.");
+      error("An error occurred while joining the room.");
     }
 
   }
@@ -57,11 +52,11 @@ export default function App() {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!roomName) {
-      setRoomNameError("Room name is required");
+      error("Room name is required");
       return;
     }
     if (!password) {
-      setPasswordError("Password is required");
+      error("Password is required");
       return;
     }
     if (activeTab === "join") {
@@ -70,6 +65,20 @@ export default function App() {
       HandleCreateRoom();
     }
   };
+  const error = (err) => {
+    toast.error(err, {
+      position: "top-center",
+      autoClose: 5000,
+      hideProgressBar: false,
+      closeOnClick: false,
+      pauseOnHover: true,
+      draggable: true,
+      progress: undefined,
+      theme: "dark",
+      transition: Bounce,
+    });
+  }
+
   return (<>
     <div className="fixed z-0 h-full w-full bg-slate-950"><div className="absolute bottom-0 left-0 right-0 top-0 bg-[radial-gradient(circle_500px_at_50%_200px,#3e3e3e,transparent)]"></div></div>
     <div className="relative z-10 flex items-center justify-center min-h-screen min-w-screen p-10">
@@ -129,6 +138,16 @@ export default function App() {
         </form>
       </div>
     </div>
+    <ToastContainer
+      stacked={true}
+      position="top-center"
+      autoClose={4000}
+      pauseOnFocusLoss
+      draggable
+      pauseOnHover
+      theme="dark"
+      transition={Bounce}
+    />
   </>
   );
 }
