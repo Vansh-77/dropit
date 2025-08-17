@@ -14,24 +14,43 @@ export default function App() {
   const HandleCreateRoom = () => {
     try {
       socket.emit("createRoom", { roomName, password });
-      socket.once("error",(message)=>{
+      socket.once("error", (message) => {
         setRoomNameError(message);
       });
-      socket.once("InternalError",(message)=>{
+      socket.once("InternalError", (message) => {
         alert(message);
       });
-      socket.once("success",()=>{
-        localStorage.setItem("password",password);
+      socket.once("success", () => {
+        localStorage.setItem("password", password);
         navigate(`/${roomName}`);
       });
 
     } catch (error) {
-      console.error("Error creating room:", error);
       setRoomNameError("Failed to create room. Please try again.");
     }
   };
 
   const HandleJoinRoom = () => {
+    try {
+      socket.emit("joinRoom", { roomName, password });
+      socket.once("error", (message) => {
+        if (message === "Room not found") {
+          setRoomNameError(message);
+        } else {
+          setPasswordError(message);
+        }
+      });
+      socket.once("InternalError", (message) => {
+        alert(message);
+      });
+      socket.once("success", () => {
+        localStorage.setItem("password", password);
+        navigate(`/${roomName}`);
+      });
+
+    } catch (error) {
+      setError("An error occurred while joining the room.");
+    }
 
   }
 
@@ -46,7 +65,7 @@ export default function App() {
       return;
     }
     if (activeTab === "join") {
-      console.log("Joining room:", roomName, password);
+      HandleJoinRoom();
     } else {
       HandleCreateRoom();
     }
@@ -59,8 +78,8 @@ export default function App() {
           <button
             onClick={() => setActiveTab("join")}
             className={`flex-1 py-3 text-center font-semibold cursor-pointer ${activeTab === "join"
-                ? "bg-gradient-to-r from-blue-600 to-cyan-400 text-black"
-                : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+              ? "bg-gradient-to-r from-blue-600 to-cyan-400 text-black"
+              : "bg-gray-700 text-gray-300 hover:bg-gray-600"
               }`}
           >
             Join Room
@@ -68,8 +87,8 @@ export default function App() {
           <button
             onClick={() => setActiveTab("create")}
             className={`flex-1 py-3 text-center font-semibold  cursor-pointer ${activeTab === "create"
-                ? "bg-gradient-to-r from-purple-500 to-pink-600 text-black"
-                : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+              ? "bg-gradient-to-r from-purple-500 to-pink-600 text-black"
+              : "bg-gray-700 text-gray-300 hover:bg-gray-600"
               }`}
           >
             Create Room
@@ -101,8 +120,8 @@ export default function App() {
           <button
             type="submit"
             className={`w-full py-2 mt-5 rounded-lg font-semibold cursor-pointer ${activeTab === "join"
-                ? "bg-gradient-to-r from-blue-500 to-cyan-400 text-black hover:opacity-90"
-                : "bg-gradient-to-r from-purple-500 to-pink-500 text-black hover:opacity-90"
+              ? "bg-gradient-to-r from-blue-500 to-cyan-400 text-black hover:opacity-90"
+              : "bg-gradient-to-r from-purple-500 to-pink-500 text-black hover:opacity-90"
               }`}
           >
             {activeTab === "join" ? "Join Now" : "Create Room"}

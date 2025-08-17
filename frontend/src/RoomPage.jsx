@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useParams } from "react-router";
 import socket from "../socket/socket";
 import Peer from "simple-peer";
+import {QRCodeSVG} from "qrcode.react";
 
 export default function RoomPage() {
     const { roomName } = useParams();
@@ -18,10 +19,19 @@ export default function RoomPage() {
 
     useEffect(() => {
         if (initialrender) {
-            const password = localStorage.getItem("password");
-            if (password) {
-                setroomJoined(true);
+            const params = new URLSearchParams(window.location.search);
+            const passwordFromUrl = params.get("password");
+
+            if (passwordFromUrl) {
+                localStorage.setItem("password", passwordFromUrl);
+                handleJoinRoom();
                 setinitialrender(false);
+            } else {
+                const password = localStorage.getItem("password");
+                if (password) {
+                    setroomJoined(true);
+                    setinitialrender(false);
+                }
             }
         }
     }, [])
@@ -66,7 +76,7 @@ export default function RoomPage() {
         socket.on('newMember', peerId => {
             if (!peersRef.current[peerId]) {
                 const peer = createPeer(peerId, false)
-              peersRef.current[peerId] = peer;
+                peersRef.current[peerId] = peer;
             }
         });
 
@@ -127,44 +137,44 @@ export default function RoomPage() {
 
         reader.readAsArrayBuffer(file);
     };
-    const fileBufferRef ={};
+    const fileBufferRef = {};
     const handleFileMessage = (peerId, data) => {
-    if (data instanceof Uint8Array) {
-        const text = new TextDecoder().decode(data);
-        try {
-            const msg = JSON.parse(text);
-            if (msg.type === "file-meta") {
-                fileBufferRef[peerId] = {
-                    fileName: msg.fileName,
-                    size: msg.size,
-                    chunks: [],
-                };
-                return;
-            }
-
-            if (msg.type === "file-end") {
-                const fileInfo = fileBufferRef[peerId];
-                if (fileInfo) {
-                    const blob = new Blob(fileInfo.chunks);
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement("a");
-                    a.href = url;
-                    a.download = fileInfo.fileName;
-                    document.body.appendChild(a);
-                    a.click();
-                    a.remove();
-                    URL.revokeObjectURL(url);
-                    delete fileBufferRef[peerId];
+        if (data instanceof Uint8Array) {
+            const text = new TextDecoder().decode(data);
+            try {
+                const msg = JSON.parse(text);
+                if (msg.type === "file-meta") {
+                    fileBufferRef[peerId] = {
+                        fileName: msg.fileName,
+                        size: msg.size,
+                        chunks: [],
+                    };
+                    return;
                 }
-                return;
-            }
-        } catch {
-            if (fileBufferRef[peerId]) {
-                fileBufferRef[peerId].chunks.push(data);
+
+                if (msg.type === "file-end") {
+                    const fileInfo = fileBufferRef[peerId];
+                    if (fileInfo) {
+                        const blob = new Blob(fileInfo.chunks);
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement("a");
+                        a.href = url;
+                        a.download = fileInfo.fileName;
+                        document.body.appendChild(a);
+                        a.click();
+                        a.remove();
+                        URL.revokeObjectURL(url);
+                        delete fileBufferRef[peerId];
+                    }
+                    return;
+                }
+            } catch {
+                if (fileBufferRef[peerId]) {
+                    fileBufferRef[peerId].chunks.push(data);
+                }
             }
         }
-    }
-};
+    };
 
     const handleJoinRoom = () => {
         try {
@@ -243,14 +253,19 @@ export default function RoomPage() {
     const handleBrowseClick = () => {
         inputRef.current.click();
     };
+    const password = localStorage.getItem("password");
+    const roomUrl = `${window.location.origin}/${roomName}?password=${encodeURIComponent(password)}`;
 
     return (<>
         <div className="fixed z-0 h-full w-full bg-slate-950"><div className="absolute bottom-0 left-0 right-0 top-0 bg-[radial-gradient(circle_500px_at_50%_200px,#3e3e3e,transparent)]"></div></div>
         <div className="relative h-screen w-full text-white">
             {roomExists ? roomJoined ?
-                <div className="relative flex items-center justify-center h-full">
+                <div className="relative flex items-center justify-center h-full px-10">
                     <div className="w-full max-w-2xl bg-gray-800 rounded-xl shadow-lg overflow-hidden p-6 space-y-6">
+                        <div className="flex justify-between items-center">
                         <h1 className="text-xl font-bold">Room: {roomName}</h1>
+                         <QRCodeSVG value={roomUrl} size={150} />
+                        </div>
                         <div
                             onDragEnter={handleDrag}
                             onDragLeave={handleDrag}
