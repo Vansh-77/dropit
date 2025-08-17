@@ -3,6 +3,7 @@ import cors from "cors";
 import {createServer}from "http";
 import {Server} from "socket.io";
 import socket from './socket/socket.js';
+import "dotenc/config";
 
 const app = express();
 
@@ -13,7 +14,7 @@ app.use(express.json());
 app.use(cors());
 
 app.use('/',(req ,res)=>{
-    res.send("sf backend is running");
+    res.send("dropit backend is running");
 });
 
 socket(io);
