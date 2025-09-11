@@ -6,7 +6,7 @@ import { ToastContainer, toast ,Bounce } from 'react-toastify';
 
 export default function App() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState("join");
+  const [activeTab, setActiveTab] = useState("create");
   const [roomName, setRoomName] = useState("");
   const [password, setPassword] = useState("");
 
