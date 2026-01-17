@@ -13,9 +13,16 @@ export default function RoomPage() {
     const [roomJoined, setroomJoined] = useState(false);
     const [roomExists, setroomExists] = useState(false);
     const [initialrender, setinitialrender] = useState(true);
+    const [sharedFiles, setSharedFiles] = useState([]);
+    const [showFiles, setShowFiles] = useState(false);
+
     const peersRef = useRef({});
 
     const inputRef = useRef(null);
+
+    const incomingFilesRef = useRef({});
+
+    const activeFileByPeerRef = useRef({});
 
     useEffect(() => {
         if (initialrender) {
@@ -132,62 +139,114 @@ export default function RoomPage() {
         return peer;
     }
 
-    const sendFile = (file) => {
-        const reader = new FileReader();
+    const CHUNK_SIZE = 64 * 1024; // 64 KB
 
-        reader.onload = () => {
-            const meta = JSON.stringify({
-                type: "file-meta",
-                fileName: file.name,
-                size: file.size,
-            });
-            Object.values(peersRef.current).forEach(peer => peer.send(meta));
+    const sendFile = async (file) => {
+        const buffer = await file.arrayBuffer();
+        const fileId = crypto.randomUUID();
 
-            Object.values(peersRef.current).forEach(peer => peer.send(reader.result));
-
-            const endMsg = JSON.stringify({ type: "file-end" });
-            Object.values(peersRef.current).forEach(peer => peer.send(endMsg));
+        const meta = {
+            type: "file-meta",
+            fileId,
+            fileName: file.name,
+            fileSize: buffer.byteLength,
         };
 
-        reader.readAsArrayBuffer(file);
+        Object.values(peersRef.current).forEach(peer =>
+            peer.send(JSON.stringify(meta))
+        );
+
+        for (let offset = 0; offset < buffer.byteLength; offset += CHUNK_SIZE) {
+            const chunk = buffer.slice(offset, offset + CHUNK_SIZE);
+            Object.values(peersRef.current).forEach(peer => peer.send(chunk));
+        }
+
+        Object.values(peersRef.current).forEach(peer =>
+            peer.send(JSON.stringify({ type: "file-end", fileId }))
+        );
     };
-    const fileBufferRef = {};
+
     const handleFileMessage = (peerId, data) => {
         if (data instanceof Uint8Array) {
             const text = new TextDecoder().decode(data);
             try {
                 const msg = JSON.parse(text);
+
                 if (msg.type === "file-meta") {
-                    fileBufferRef[peerId] = {
+                    incomingFilesRef.current[msg.fileId] = {
                         fileName: msg.fileName,
-                        size: msg.size,
+                        size: msg.fileSize,
+                        received: 0,
                         chunks: [],
+                        sender: peerId,
                     };
+
+                    activeFileByPeerRef.current[peerId] = msg.fileId;
+
+                    setSharedFiles(prev => [
+                        ...prev,
+                        {
+                            id: msg.fileId,
+                            name: msg.fileName,
+                            size: msg.fileSize,
+                            progress: 0,
+                            blob: null,
+                        }
+                    ]);
                     return;
                 }
 
                 if (msg.type === "file-end") {
-                    const fileInfo = fileBufferRef[peerId];
-                    if (fileInfo) {
-                        const blob = new Blob(fileInfo.chunks);
-                        const url = URL.createObjectURL(blob);
-                        const a = document.createElement("a");
-                        a.href = url;
-                        a.download = fileInfo.fileName;
-                        document.body.appendChild(a);
-                        a.click();
-                        a.remove();
-                        URL.revokeObjectURL(url);
-                        delete fileBufferRef[peerId];
-                    }
+                    const file = incomingFilesRef.current[msg.fileId];
+                    if (!file) return;
+
+                    const blob = new Blob(file.chunks);
+
+                    setSharedFiles(prev =>
+                        prev.map(f =>
+                            f.id === msg.fileId
+                                ? { ...f, progress: 100, blob }
+                                : f
+                        )
+                    );
+
+                    delete incomingFilesRef.current[msg.fileId];
+                    delete activeFileByPeerRef.current[peerId];
                     return;
                 }
-            } catch {
-                if (fileBufferRef[peerId]) {
-                    fileBufferRef[peerId].chunks.push(data);
-                }
+            }
+            catch {
+                const fileId = activeFileByPeerRef.current[peerId];
+                if (!fileId) return;
+
+                const activeFile = incomingFilesRef.current[fileId];
+                if (!activeFile) return;
+
+                activeFile.chunks.push(data);
+                activeFile.received += data.byteLength;
+
+                const progress = Math.min(
+                    100,
+                    Math.floor((activeFile.received / activeFile.size) * 100)
+                );
+
+                setSharedFiles(prev =>
+                    prev.map(f =>
+                        f.id === fileId ? { ...f, progress } : f
+                    )
+                );
+                console.log(sharedFiles);
             }
         }
+    };
+
+    const downloadFile = (blob, filename) => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
     };
 
     const handleJoinRoom = () => {
@@ -280,6 +339,37 @@ export default function RoomPage() {
                             <h1 className="text-xl font-bold">Room: {roomName}</h1>
                             <QRCodeSVG value={roomUrl} size={150} />
                         </div>
+                        {/* {sharedFiles.length > 0 && (
+                            <div className="space-y-2 mt-4">
+                                <h2 className="text-lg font-semibold">Shared Files</h2>
+
+                                {sharedFiles.map(file => (
+                                    <div
+                                        key={file.id}
+                                        className="flex items-center justify-between bg-gray-700 p-3 rounded"
+                                    >
+                                        <div>
+                                            <p className="font-medium">{file.name}</p>
+                                            <p className="text-xs text-gray-400">
+                                                {(file.size / 1024).toFixed(1)} KB • {file.progress}%
+                                            </p>
+                                        </div>
+
+                                        {file.blob && file.progress === 100 ? (
+                                            <button
+                                                className="bg-green-500 px-3 py-1 rounded"
+                                                onClick={() => downloadFile(file.blob, file.name)}
+                                            >
+                                                Download
+                                            </button>
+                                        ) : (
+                                            <span className="text-sm text-gray-400">Receiving…</span>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        )} */}
+
                         <div
                             onDragEnter={handleDrag}
                             onDragLeave={handleDrag}
@@ -313,6 +403,49 @@ export default function RoomPage() {
                                 </div>
                             )}
                         </div>
+                        {sharedFiles.length > 0 && (
+                            <div
+                                className="bg-gray-600 px-4 py-2 rounded-lg cursor-pointer shadow-lg z-50"
+                                onClick={() => setShowFiles(true)}
+                            >
+                                📁 {sharedFiles.length} {sharedFiles.length === 1 ? "file" : "files"}
+                            </div>
+                        )}
+                        {showFiles && (
+                            <div className="fixed inset-0 bg-black/60 z-50">
+                                <div className="absolute bottom-0 left-0 right-0 bg-gray-900 rounded-t-xl p-4 max-h-[60vh] overflow-y-auto">
+                                    <div className="flex justify-between items-center mb-4">
+                                        <h2 className="text-lg font-semibold">Shared Files</h2>
+                                        <button onClick={() => setShowFiles(false)}>✕</button>
+                                    </div>
+
+                                    {sharedFiles.map(file => (
+                                        <div
+                                            key={file.id}
+                                            className="flex justify-between items-center bg-gray-800 p-3 rounded mb-2"
+                                        >
+                                            <div>
+                                                <p className="font-medium">{file.name}</p>
+                                                <p className="text-xs text-gray-400">
+                                                    {(file.size / 1024).toFixed(1)} KB • {file.progress}%
+                                                </p>
+                                            </div>
+
+                                            {file.blob && file.progress === 100 ? (
+                                                <button
+                                                    className="bg-green-500 px-3 py-1 rounded"
+                                                    onClick={() => downloadFile(file.blob, file.name)}
+                                                >
+                                                    Download
+                                                </button>
+                                            ) : (
+                                                <span className="text-gray-400 text-sm">Receiving…</span>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
                 : <div className="relative flex items-center justify-center h-full">
